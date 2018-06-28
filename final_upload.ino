@@ -4,30 +4,31 @@
 
 // enter your own sensor properties here, including calibration points
 FlowSensorProperties MySensor = {1.67f, 8.3944f, {1, 1, 1, 0.92, 1.08, 1, 1.08, 1, 1, 1.04}};
-FlowMeter Meter = FlowMeter(4, MySensor);
+FlowMeter Meter = FlowMeter(2, MySensor);
 
 
 // wifi details
-const char* ssid = "Dialog WIFI";
-const char* password = "YT43LNAH7NR";
+const char* ssid = "jayasanka";
+const char* password = "jayseanjaysean";
 
 //Height by cm
-long height = 18;
+long height = 13;
 
-//Tank volume by litters
-double tankVolume = 6;
 
 //Automated motor
-int relaySwitch = 13;// D7
+int relaySwitch = 16;// D0
 
 //ultrasonic sensor
-#define trigPin 4 //D1
-#define echoPin 5 //D2
+#define trigPin 14 //D5
+#define echoPin 12 //D6
 
 // timekeeping variables
 long period = 10000;   // fifteen seconds (in milliseconds)
 long lastTime = 0;
 double lastVolume = 0.0f;
+
+long mPeriod = 2000;
+long mLastTime = 0;
 
 // define an 'interrupt service routine' (ISR)
 void MeterISR() {
@@ -53,7 +54,7 @@ void setup() {
   }
 
   // enable a call to the 'interrupt service handler' (ISR) on every rising edge at the interrupt pin
-  attachInterrupt(digitalPinToInterrupt(D4), MeterISR, RISING);//D2 toD4
+  attachInterrupt(digitalPinToInterrupt(D2), MeterISR, RISING);//D2 
 
   // sometimes initializing the gear generates some pulses that we should ignore
   Meter.reset();
@@ -63,34 +64,28 @@ void loop() {
       
   // do some timekeeping
   long currentTime = millis();
-//  Serial.print("Current time: ");
-//  Serial.println(currentTime);
   long duration = currentTime - lastTime;
-  //Serial.println(duration);
-  // wait between display updates
+
+  long mDuration = currentTime - mLastTime;
+
+//  if(mDuration >= mPeriod){
+//      checkMotor();
+//    }
+  
   if (duration >= period) {
-
-    // process the counted ticks
-    Meter.tick(duration);
-
-    // output some measurement result
-    Serial.println("FlowMeter - current flow rate: " + String(Meter.getCurrentFlowrate()) + " l/min, nominal volume: " + String(Meter.getTotalVolume()) + " l");
-    double cm = getHeight();
-
-    double currentVolume = Meter.getTotalVolume() - lastVolume;
-    double percentageByVolume = getPercentageByVolume(currentVolume,tankVolume);
-    double percentageByHeight = getPercentageByHeight(cm,height);
-    checkMotorByHeight(percentageByHeight);
-    //checkMotorByVolume(percentageByVolume);
     
-    // prepare for next cycle
+    Meter.tick(duration);
+   
+    Serial.println("FlowMeter - current flow rate: " + String(String(Meter.getTotalVolume()) + " l"));
+    int cm = getHeight();
+    
     sendData(cm);
     
     lastTime = currentTime;
   }
 }
 
-void sendData(double cm) {
+void sendData(int cm) {
   
   if (WiFi.status() == WL_CONNECTED) {
 
@@ -125,86 +120,34 @@ void sendData(double cm) {
   }
 }
 
-double getHeight(){
+int getHeight(){
   
-  long duration, cm, inches;
-     
-  // Clears the trigPin
+    long duration, cm;
+      
     digitalWrite(trigPin, LOW);  
     delayMicroseconds(2); 
     
-  // Sets the trigPin on HIGH state for 10 micro seconds
+  
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     
-  // Reads the echoPin, returns the sound wave travel time in microseconds
     duration = pulseIn(echoPin, HIGH);
     
-  // Calculating the distance
+  
     cm = (duration/2) / 29.1;
-    inches = (duration/2) / 74; 
-    Serial.print(inches);
-    Serial.print(" inches\n");
-    Serial.print(cm);
-    Serial.print(" cm ");
-    Serial.println();
-  // Prints the distance on the Serial Monitor
-//    Serial.print(inches + "in, ");
-//    Serial.print(cm + "cm\n");
-    
-    return (double) cm;  
+   
+    return (int) cm;  
  }
 
-//Get the volume by percentage
-double getPercentageByVolume(double currentVolume,double tankVolume){
-  //Serial.println("Price ");
-  //Serial.println(currentVolume);
-  //Serial.println(tankVolume);
-  double percentageByVolume = ((tankVolume-currentVolume)/tankVolume)*100;
-  
-  return percentageByVolume;
-} 
 
-//Get the height by percentage
-double getPercentageByHeight(double currentHeight,double tankHeight){
-  
-  //Serial.println(currentHeight);
-  //Serial.println(tankHeight);
-  double percentageByHeight = ((tankHeight-currentHeight)/tankHeight)*100;
-  Serial.print("Percentage ");
-  Serial.println(percentageByHeight);
-  return percentageByHeight;
-}
 
-void checkMotorByHeight(double percentageByHeight){
-  Serial.println(percentageByHeight);
-  
-  if(percentageByHeight < 30){
-    
-    digitalWrite(relaySwitch, LOW);
-    //Serial.print(percentageByHeight);
-    Serial.println("Motor is ON Height!");
-  }else{
-    
+void checkMotor(){
+
+  double percentage = (height-getHeight()-5)/height*100;
+  if(percentage < 20){    
     digitalWrite(relaySwitch, HIGH);
-       // Serial.print(percentageByHeight);
-    Serial.println("Motor is OFF Height!");
+  }else if(percentage>90){
+    digitalWrite(relaySwitch, LOW);
   }
 }
-
-void checkMotorByVolume(double percentageByVolume){
-    Serial.println(percentageByVolume);
-    if(percentageByVolume < 30){
-      
-    digitalWrite(relaySwitch, LOW);
-        //Serial.print(percentageByVolume);
-    Serial.println("Motor is ON!");    
-  }else{
-    
-    digitalWrite(relaySwitch, HIGH);
-            //Serial.print(percentageByVolume);
-    Serial.println("Motor is OFF!");
-  }
-}
-
